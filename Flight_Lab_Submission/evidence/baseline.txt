@@ -1,0 +1,8 @@
+Observed by Codex in the in-app browser, 2026-09-30. Transcribed from tests.html.
+PASS: Pause preserves position
+PASS: North increases latitude
+PASS: East increases longitude
+PASS: Heading wraps in both directions
+PASS: Height limits clamp
+PASS: Zero speed keeps position
+PASS: Duration consistency: one second equals ten 0.1-second steps

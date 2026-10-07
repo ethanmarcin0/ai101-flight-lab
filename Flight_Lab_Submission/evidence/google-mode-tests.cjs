@@ -1,0 +1,21 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync('Flight_Lab/app.js','utf8');
+function harness(key='',ionToken='',rejectIon=false){
+ const els={};const el=id=>els[id]??={value:'',textContent:''};let viewer,calls=0,pending=[],ionCalls=0;
+ class Event{addEventListener(fn){this.fn=fn;}}
+ const provider=()=>({errorEvent:new Event()});
+ const C={IonResource:{async fromAssetId(id,options){ionCalls++;assert.equal(id,2275207);assert.equal(options.accessToken,ionToken);if(rejectIon)throw Error('denied');return {ion:true}}},Viewer:class{constructor(){viewer=this;this.scene={globe:{show:true},primitives:{items:[],add(t){this.items.push(t);return t},remove(t){this.items=this.items.filter(x=>x!==t);t.destroy()}},preRender:new Event()};this.imageryLayers={removeAll(){},addImageryProvider(p){this.provider=p}};this.entities={add(){}};this.camera={lookAt(){},lookAtTransform(){},setView(){}}}},EllipsoidTerrainProvider:class{},TileMapServiceImageryProvider:{fromUrl:async()=>provider()},OpenStreetMapImageryProvider:class{constructor(){return provider()}},Resource:class{constructor(o){Object.assign(this,o)}},Cesium3DTileset:{fromUrl(r,o){calls++;if(ionToken)assert.equal(r.ion,true);assert.equal(o.showCreditsOnScreen,true);return new Promise((resolve,reject)=>pending.push({resolve,reject}))}},Cartesian3:{fromDegrees(){return {}}},CallbackProperty:class{},Color:{GOLD:1,BLACK:2,WHITE:3},DistanceDisplayCondition:class{},Cartesian2:class{},HeadingPitchRange:class{},Math:{toRadians:x=>x},Matrix4:{IDENTITY:0}};
+ const context={Cesium:C,document:{getElementById:el,addEventListener(){}},window:{FLIGHT_CONFIG:{imagery:'naturalEarth',googleMapsApiKey:key,cesiumIonAccessToken:ionToken,startView:'earth'}},performance:{now:()=>0},console,Promise};vm.createContext(context);vm.runInContext(fs.readFileSync('Flight_Lab/flight-core.js','utf8'),context);vm.runInContext(source,context);
+ return {el,get viewer(){return viewer},get ionCalls(){return ionCalls},get calls(){return calls},pending,choose(kind){el('map-style').value=kind;return el('map-style').onchange()}};
+}
+function tile(){return {tileFailed:{addEventListener(fn){this.fn=fn}},destroy(){this.destroyed=true}}}
+(async()=>{
+ let h=harness();await new Promise(setImmediate);await h.choose('google3d');assert.equal(h.calls,0);assert.equal(h.el('map-style').value,'naturalEarth');assert.match(h.el('map-status').textContent,/needs/);assert.equal(h.viewer.scene.globe.show,true);
+ h=harness('test-only-not-a-real-key');await new Promise(setImmediate);let p=h.choose('google3d'),t=tile();h.pending.shift().resolve(t);await p;assert.equal(h.viewer.scene.globe.show,false);await h.choose('streets');assert.equal(t.destroyed,true);assert.equal(h.viewer.scene.globe.show,true);
+ p=h.choose('google3d');h.pending.shift().reject(Error('denied'));await p;assert.equal(h.el('map-style').value,'streets');assert.equal(h.viewer.scene.globe.show,true);
+ p=h.choose('google3d');t=tile();await h.choose('naturalEarth');h.pending.shift().resolve(t);await p;assert.equal(t.destroyed,true);assert.equal(h.viewer.scene.globe.show,true);
+ p=h.choose('google3d');t=tile();h.pending.shift().resolve(t);await p;t.tileFailed.fn();await Promise.resolve();assert.equal(t.destroyed,true);assert.equal(h.el('map-style').value,'naturalEarth');assert.equal(h.viewer.scene.globe.show,true);
+ h=harness('unused-direct-key','mock-ion-token');await new Promise(setImmediate);assert.equal(h.ionCalls,0);p=h.choose('google3d');await new Promise(setImmediate);t=tile();h.pending.shift().resolve(t);await p;assert.equal(h.ionCalls,1);assert.equal(h.viewer.scene.globe.show,false);await h.choose('naturalEarth');assert.equal(t.destroyed,true);
+ h=harness('','mock-ion-token',true);await new Promise(setImmediate);await h.choose('google3d');assert.equal(h.calls,0);assert.equal(h.el('map-style').value,'naturalEarth');assert.equal(h.viewer.scene.globe.show,true);
+ console.log('PASS: missing key, Google activation (mock), switch cleanup, root failure, stale request cleanup, tile failure fallback. Ion token routing, precedence, startup inactivity and denial fallback passed. No real service requests made.');
+})().catch(e=>{console.error(e);process.exitCode=1});
