@@ -1,0 +1,240 @@
+--- original/index.html
++++ final/index.html
+@@ -1,11 +1,16 @@
+ <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 101 • Flight Lab</title>
+ <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.145/Build/Cesium/Widgets/widgets.css"><link rel="stylesheet" href="style.css"></head><body>
+-<header><p>ALVERNIA · AI 101 · WEEK 6</p><h1>Build. Test. Explain.</h1><p>A simple CesiumJS flight lab • Grid globe, simulated motion, no real aircraft physics.</p></header>
+-<main><section aria-label="Flight controls"><h2>Your flight controls</h2><p id="message" role="status">Loading Cesium…</p>
+-<div class="buttons"><button id="fly">Fly</button><button id="pause">Pause</button><button id="reset">Reset</button><button id="left">Left 10°</button><button id="right">Right 10°</button></div>
++<header><p>ALVERNIA · AI 101 · WEEK 6</p><h1>Reading &amp; Alvernia Explorer</h1><p>A simple CesiumJS flight lab • Mapped globe, simulated motion, no real aircraft physics.</p><p>Explore local history and campus sights, then practice verifying sources and simulated flight behavior. Built for Alvernia students, with a cybersecurity focus on evidence before trust.</p></header>
++<section class="sights-guide" aria-labelledby="sights-title">
++<div class="guide-heading"><div><p class="eyebrow">EXPLORE READING, PENNSYLVANIA</p><h2 id="sights-title">City stories. Campus connections.</h2><p>Choose a sight to discover its story. View mapped landmarks on the globe or open the official campus map.</p></div><a href="#flight-controls">Jump to flight controls ↓</a></div>
++<div class="filters" aria-label="Filter sights"><button data-filter="All" aria-pressed="true">All sights</button><button data-filter="Reading history" aria-pressed="false">Reading history</button><button data-filter="Alvernia sights" aria-pressed="false">Alvernia sights</button></div>
++<p id="sight-count" role="status"></p><div class="guide-layout"><div id="sight-list" class="sight-list"></div><article id="sight-detail" aria-labelledby="sight-name"><p id="sight-tag" class="eyebrow"></p><h3 id="sight-name"></h3><p id="sight-description"></p><p id="sight-location"></p><p id="sight-verification" class="verification"></p><div class="sight-actions"><button id="view-sight" disabled>View on globe</button><a id="sight-map" target="_blank" rel="noopener noreferrer">Open location map ↗</a><a id="sight-source" target="_blank" rel="noopener noreferrer">Read source ↗</a></div><p id="sight-date" class="small"></p></article></div>
++<p class="small">The globe displays land and roads using OpenStreetMap, with Cesium Natural Earth available for a whole-Earth view. These are map images, not 3D building models. Descriptions are sourced separately from map positions. Check each venue’s website for current access information.</p>
++</section><main id="flight-controls"><section aria-label="Flight controls"><h2>Your flight controls</h2><p id="message" role="status">Loading Cesium…</p>
++<p id="map-status" role="status">Loading map imagery…</p><label for="map-style">Globe map</label><select id="map-style"><option value="streets">Land, roads &amp; labels</option><option value="naturalEarth">Cesium Natural Earth</option></select><div class="buttons"><button id="earth">Whole globe</button><button id="fly">Fly</button><button id="pause">Pause</button><button id="reset">Reset</button><button id="slow">Slow Tour — 30 m/s</button><button id="left">Left 10°</button><button id="right">Right 10°</button></div>
+ <label for="speed">Speed (meters per second)</label><input id="speed" type="number" min="0" max="250" step="10" value="70">
+ <label for="height">Height above model ellipsoid (meters)</label><input id="height" type="number" min="50" max="5000" step="50" value="500">
+-<p id="readout"></p><p>Change heading and height with the controls. Pause before exploring the view. Reset returns to the teaching origin.</p><p><a href="tests.html">Run movement tests</a></p></section>
++<p id="readout"></p><p>Slow Tour sets speed to 30 m/s without starting or pausing flight. Change heading and height with the controls. Pause before exploring the view. Reset returns to the teaching origin.</p><p><a href="tests.html">Run movement tests</a></p></section>
+ <div id="globe" aria-label="Interactive 3D globe showing a simulated moving marker"></div></main>
+-<footer>The approximate Reading-area origin is not a verified campus pin. No terrain, imagery, collision detection, or lift/drag model. Use the numeric readout alongside the globe.</footer>
+-<script src="https://cesium.com/downloads/cesiumjs/releases/1.145/Build/Cesium/Cesium.js"></script><script src="flight-core.js"></script><script src="app.js"></script></body></html>+<footer>The approximate Reading-area origin is not a verified campus pin. Map imagery is shown on a smooth ellipsoid; no elevation terrain, collision detection, or lift/drag model. Use the numeric readout alongside the globe.</footer>
++<script src="https://cesium.com/downloads/cesiumjs/releases/1.145/Build/Cesium/Cesium.js"></script><script src="flight-core.js"></script><script src="sights.js"></script><script src="sights-ui.js"></script><script src="Config.js"></script><script src="app.js"></script></body></html>--- original/app.js
++++ final/app.js
+@@ -10,18 +10,40 @@
+    fullscreenButton:false, infoBox:false, selectionIndicator:false,
+    terrainProvider:new Cesium.EllipsoidTerrainProvider()
+  });
+- viewer.imageryLayers.addImageryProvider(new Cesium.GridImageryProvider());
++ const config = window.FLIGHT_CONFIG || {imagery:'streets',showTrainingGrid:false};
++ let mapRequest = 0;
++ async function setMap(kind){
++  const request = ++mapRequest;
++  $('map-status').textContent='Loading map imagery…';
++  try {
++   const provider = kind==='naturalEarth'
++    ? await Cesium.TileMapServiceImageryProvider.fromUrl(Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII'))
++    : new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/'});
++   if(request!==mapRequest)return;
++   provider.errorEvent.addEventListener(()=>{$('map-status').textContent='Some map tiles could not load. Check internet access or try the other globe map.';});
++   viewer.imageryLayers.removeAll();
++   viewer.imageryLayers.addImageryProvider(provider);
++   $('map-status').textContent=kind==='naturalEarth'?'Cesium Natural Earth — low-resolution land/ocean imagery; use Whole globe.':'OpenStreetMap — land, roads and labels on the Cesium globe.';
++  } catch(error){
++   if(request!==mapRequest)return;
++   $('map-status').textContent='Map imagery could not load. Try the other globe map; flight controls remain available.';
++   console.error(error);
++  }
++ }
++ $('map-style').value=config.imagery==='naturalEarth'?'naturalEarth':'streets';
++ $('map-style').onchange=()=>setMap($('map-style').value);
++ setMap($('map-style').value);
+  const position = () => Cesium.Cartesian3.fromDegrees(state.lon, state.lat, state.height);
+  const plane = viewer.entities.add({
+    position: new Cesium.CallbackProperty(position, false),
+    point:{pixelSize:16,color:Cesium.Color.GOLD,outlineColor:Cesium.Color.BLACK,outlineWidth:2},
+-   label:{text:'SIMULATED FLIGHT',font:'14px sans-serif',pixelOffset:new Cesium.Cartesian2(0,-28),showBackground:true}
++   label:{distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,200000),text:'SIMULATED FLIGHT',font:'14px sans-serif',pixelOffset:new Cesium.Cartesian2(0,-28),showBackground:true}
+  });
+  viewer.entities.add({position:Cesium.Cartesian3.fromDegrees(-75.93,40.33,0),
+    point:{pixelSize:10,color:Cesium.Color.WHITE},
+-   label:{text:'Reading-area teaching origin',font:'14px sans-serif',pixelOffset:new Cesium.Cartesian2(0,22),showBackground:true}});
++   label:{distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,200000),text:'Reading-area teaching origin',font:'14px sans-serif',pixelOffset:new Cesium.Cartesian2(0,22),showBackground:true}});
+  // Nearby training grid gives visible scale without remote imagery.
+- for(let i=-5;i<=5;i++){
++ for(let i=-5;config.showTrainingGrid && i<=5;i++){
+    const d=i*0.01;
+    viewer.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArray([-76.00,40.33+d,-75.86,40.33+d]),width:1,material:Cesium.Color.WHITE.withAlpha(0.35)}});
+    viewer.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArray([-75.93+d,40.27,-75.93+d,40.39]),width:1,material:Cesium.Color.WHITE.withAlpha(0.35)}});
+@@ -31,7 +53,10 @@
+    $('readout').textContent=`Heading ${state.heading.toFixed(0)}° · Longitude ${state.lon.toFixed(5)} · Latitude ${state.lat.toFixed(5)} · Height ${state.height.toFixed(0)} m · Speed ${state.speed.toFixed(0)} m/s`;
+  }
+  function follow(){viewer.camera.lookAt(position(),new Cesium.HeadingPitchRange(Cesium.Math.toRadians(state.heading),Cesium.Math.toRadians(-30),2500));}
++ $('earth').onclick=()=>{state.paused=true;paint();viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);viewer.camera.setView({destination:Cesium.Cartesian3.fromDegrees(-75.93,20,22000000),orientation:{heading:0,pitch:Cesium.Math.toRadians(-90),roll:0}});};
+  $('fly').onclick=()=>{state.paused=false;paint();};
++ // Speed preset changes only speed; the current paused/flying state is preserved.
++ $('slow').onclick=()=>{state.speed=30;$('speed').value=state.speed;paint();};
+  $('pause').onclick=()=>{state.paused=true;paint();};
+  $('left').onclick=()=>{state.heading=Flight.wrap(state.heading-10);paint();follow();};
+  $('right').onclick=()=>{state.heading=Flight.wrap(state.heading+10);paint();follow();};
+@@ -45,7 +70,19 @@
+    const now=performance.now(), dt=Math.min((now-last)/1000,0.1);last=now;
+    state=Flight.step(state,dt);
+    if(!state.paused)follow();
+-   if(now-lastPaint>150){paint();lastPaint=now;}
++   if(!state.paused && now-lastPaint>150){paint();lastPaint=now;}
++ });
++ // Sight viewing pauses flight and moves only the camera, not the aircraft.
++ for(const sight of SIGHTS.filter(s=>Number.isFinite(s.lon)&&Number.isFinite(s.lat))){
++  viewer.entities.add({position:Cesium.Cartesian3.fromDegrees(sight.lon,sight.lat,0),
++   point:{pixelSize:11,color:Cesium.Color.CYAN,outlineColor:Cesium.Color.BLACK,outlineWidth:2},
++   label:{distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,200000),text:sight.name,font:'13px sans-serif',pixelOffset:new Cesium.Cartesian2(0,-22),showBackground:true}});
++ }
++ SightsGuide.connect(sight=>{
++  state.paused=true;paint();
++  viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(sight.lon,sight.lat,0),
++   new Cesium.HeadingPitchRange(0,Cesium.Math.toRadians(-55),1800));
++  $('message').textContent='Paused — viewing '+sight.name+'. Fly resumes at the flight marker; Reset returns to the teaching origin.';
+  });
+  paint();follow();
+  }catch(error){$('message').textContent='The globe could not start. Check WebGL support and the browser console.';console.error(error);}
+--- original/style.css
++++ final/style.css
+@@ -1 +1,4 @@
+-*{box-sizing:border-box}body{margin:0;background:#f5f2ed;color:#202124;font:17px/1.5 system-ui,sans-serif}header{background:#800025;color:white;padding:20px 5%}header p{margin:5px 0}h1{margin:4px 0;font-size:2.3rem}h2{font-size:1.25rem}main{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:20px}section{background:white;border-radius:12px;padding:20px}#globe{height:65vh;min-height:440px;border-radius:12px;overflow:hidden}.buttons{display:flex;flex-wrap:wrap;gap:8px}button{font:inherit;padding:10px 14px;background:#800025;color:white;border:0;border-radius:6px;cursor:pointer}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #b57b00;outline-offset:3px}label{display:block;margin-top:18px}input{font:inherit;padding:8px;width:100%}#readout{font-variant-numeric:tabular-nums}a{color:#800025}footer{padding:0 24px 24px}@media(max-width:800px){main{grid-template-columns:1fr}#globe{height:55vh}}+*{box-sizing:border-box}body{margin:0;background:#f5f2ed;color:#202124;font:17px/1.5 system-ui,sans-serif}header{background:#800025;color:white;padding:20px 5%}header p{margin:5px 0}h1{margin:4px 0;font-size:2.3rem}h2{font-size:1.25rem}main{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:20px}section{background:white;border-radius:12px;padding:20px}#globe{height:65vh;min-height:440px;border-radius:12px;overflow:hidden}.buttons{display:flex;flex-wrap:wrap;gap:8px}button{font:inherit;padding:10px 14px;background:#800025;color:white;border:0;border-radius:6px;cursor:pointer}button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #b57b00;outline-offset:3px}label{display:block;margin-top:18px}input{font:inherit;padding:8px;width:100%}#readout{font-variant-numeric:tabular-nums}a{color:#800025}footer{padding:0 24px 24px}@media(max-width:800px){main{grid-template-columns:1fr}#globe{height:55vh}}
++html{scroll-behavior:smooth}header h1{max-width:1000px}.sights-guide{margin:24px 20px 0;padding:28px}.guide-heading{display:flex;justify-content:space-between;gap:24px;align-items:center}.guide-heading h2{font-size:clamp(1.6rem,3vw,2.4rem);margin:4px 0}.eyebrow{font-size:.75rem;letter-spacing:.12em;font-weight:750;color:#800025}.filters{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}.filters button{background:#f5f2ed;color:#800025;border:1px solid #dccbd0}.filters button[aria-pressed="true"]{background:#800025;color:white}.guide-layout{display:grid;grid-template-columns:minmax(260px,1fr) 1.6fr;gap:24px}.sight-list{display:grid;gap:8px;align-content:start}.sight-list button{text-align:left;background:#f5f2ed;color:#202124;border:2px solid transparent}.sight-list button[aria-pressed="true"]{border-color:#800025;background:#f9edf1}.sight-list span{display:block;font-size:.8rem;color:#65585e}.sight-list strong{font-size:1rem}#sight-detail{background:#faf6ee;border-radius:12px;padding:24px;border-top:4px solid #c59b45}#sight-name{font-size:1.7rem;line-height:1.2;margin:10px 0}.sight-actions{display:flex;flex-wrap:wrap;gap:16px;align-items:center}.verification,.small{font-size:.85rem;color:#665a50}button:disabled{background:#ded8d3;color:#655e58;cursor:not-allowed}.guide-heading>a{white-space:nowrap}@media(max-width:800px){.guide-layout{grid-template-columns:1fr}.guide-heading{display:block}.sights-guide{padding:20px;margin:16px 12px 0}}
++
++select{font:inherit;padding:10px;width:100%;margin:0 0 16px;background:white;color:#202124;border:1px solid #aaa;border-radius:6px}select:focus-visible{outline:3px solid #b57b00;outline-offset:3px}
+--- original/sights.js
++++ final/sights.js
+@@ -0,0 +1,78 @@
++/* Historical descriptions and coordinate provenance are separate. */
++window.SIGHTS = [
++  {
++    "id": "pagoda",
++    "name": "Reading Pagoda",
++    "category": "Reading history",
++    "tag": "1908 · Mount Penn",
++    "description": "Built in 1908 as part of a planned resort, the Pagoda became city property in 1911. Its hillside setting makes it one of Reading’s most recognizable landmarks.",
++    "location": "98 Duryea Drive, Reading",
++    "source": "https://www.readingpagoda.com/visit",
++    "lon": -75.905644,
++    "lat": 40.3360659,
++    "checked": "2026-10-07",
++    "coordinateSource": "https://www.readingpa.gov/visitors-map",
++    "map": "https://www.google.com/maps/search/?api=1&query=40.3360659,-75.905644"
++  },
++  {
++    "id": "goggleworks",
++    "name": "GoggleWorks Center for the Arts",
++    "category": "Reading history",
++    "tag": "Industrial heritage · Creative reuse",
++    "description": "A former goggle factory became a community arts campus when GoggleWorks opened in 2005. Today its studios, galleries and classes connect Reading’s industrial past with its creative community.",
++    "location": "201 Washington Street, Reading",
++    "source": "https://goggleworks.org/about/",
++    "lon": -75.9327258,
++    "lat": 40.3371136,
++    "checked": "2026-10-07",
++    "coordinateSource": "https://www.readingpa.gov/visitors-map",
++    "map": "https://www.google.com/maps/search/?api=1&query=40.3371136,-75.9327258"
++  },
++  {
++    "id": "theater",
++    "name": "Santander Performing Arts Center",
++    "category": "Reading history",
++    "tag": "1870s origins · Downtown Reading",
++    "description": "The building began in the 1870s as a market with a Masonic Temple above. It later served as the Academy of Music and became a venue for vaudeville, movies and live performances.",
++    "location": "Downtown Reading",
++    "source": "https://www.readingpa.gov/visitors-map",
++    "lon": -75.9260177,
++    "lat": 40.3378817,
++    "checked": "2026-10-07",
++    "coordinateSource": "https://www.readingpa.gov/visitors-map",
++    "map": "https://www.google.com/maps/search/?api=1&query=40.3378817,-75.9260177"
++  },
++  {
++    "id": "francis",
++    "name": "Francis Hall",
++    "category": "Alvernia sights",
++    "tag": "1926 dedication · University roots",
++    "description": "Alvernia’s oldest campus building was dedicated by the Bernardine Franciscan Sisters in 1926. Originally an orphanage, it later became a high school and then the home of Alvernia College in 1958. Its patio, theatre and art spaces make it a campus landmark.",
++    "location": "Alvernia Hill Campus",
++    "source": "https://www.alvernia.edu/about/francis-hall",
++    "map": "https://www.alvernia.edu/maps",
++    "checked": "2026-10-07"
++  },
++  {
++    "id": "library",
++    "name": "Franco Library",
++    "category": "Alvernia sights",
++    "tag": "Campus learning · Information literacy",
++    "description": "The Dr. Frank A. Franco Library Learning Center supports research and coursework. Its librarians help students find, evaluate and ethically use information—a direct connection to checking sources in cybersecurity.",
++    "location": "Alvernia Hill Campus",
++    "source": "https://www.alvernia.edu/franco-library-alvernia-university",
++    "map": "https://www.alvernia.edu/maps",
++    "checked": "2026-10-07"
++  },
++  {
++    "id": "post",
++    "name": "John R. Post Center",
++    "category": "Alvernia sights",
++    "tag": "Reading CollegeTowne · Downtown learning",
++    "description": "Alvernia’s downtown living and learning facility connects the university with central Reading. A renovation begun in 2021 transformed the building for academic programs, labs and community activity.",
++    "location": "401 Penn Street, Reading",
++    "source": "https://www.alvernia.edu/PostCenter",
++    "map": "https://www.google.com/maps/search/?api=1&query=John+R.+Post+Center+401+Penn+Street+Reading+PA",
++    "checked": "2026-10-07"
++  }
++];
+--- original/sights-ui.js
++++ final/sights-ui.js
+@@ -0,0 +1,37 @@
++/* This guide works even when Cesium cannot load. */
++(() => {
++ const $ = id => document.getElementById(id);
++ let active = SIGHTS[0], category = 'All', viewOnGlobe = null;
++ const mapped = s => Number.isFinite(s.lon) && Number.isFinite(s.lat);
++ function show(s) {
++  active=s;
++  $('sight-tag').textContent=s.tag; $('sight-name').textContent=s.name;
++  $('sight-description').textContent=s.description; $('sight-location').textContent=s.location;
++  $('sight-source').href=s.source; $('sight-map').href=s.map;
++  $('sight-date').textContent='Sources checked '+s.checked;
++  $('sight-verification').textContent=mapped(s)?'Map position comes from the City of Reading’s linked place coordinates. It is a reference point, not a surveyed entrance.':'Exact building coordinates have not been verified for this lab. Use the linked location map; no guessed pin is shown.';
++  $('view-sight').disabled=!mapped(s)||!viewOnGlobe;
++  $('view-sight').textContent=!mapped(s)?'Campus/location map only':viewOnGlobe?'View on globe':'Globe unavailable';
++  document.querySelectorAll('[data-sight]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sight===s.id)));
++ }
++ function render(){
++  const visible=SIGHTS.filter(s=>category==='All'||s.category===category);
++  $('sight-list').replaceChildren();
++  visible.forEach(s=>{
++   const b=document.createElement('button'); b.dataset.sight=s.id;
++   const label=document.createElement('strong');label.textContent=s.name;
++   const meta=document.createElement('span');meta.textContent=s.category;
++   b.append(label,meta); b.onclick=()=>show(s); $('sight-list').append(b);
++  });
++  $('sight-count').textContent=visible.length+' sights';
++  show(visible.includes(active)?active:visible[0]);
++ }
++ document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{
++  category=b.dataset.filter;
++  document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
++  render();
++ });
++ $('view-sight').onclick=()=>{if(viewOnGlobe&&mapped(active)){viewOnGlobe(active);$('flight-controls').scrollIntoView({behavior:'smooth'});}};
++ window.SightsGuide={connect(fn){viewOnGlobe=fn;show(active);}};
++ render();
++})();
+--- original/Config.js
++++ final/Config.js
+@@ -0,0 +1,7 @@
++/* Public browser settings. No account or token is needed for the default map. */
++window.FLIGHT_CONFIG = Object.freeze({
++  // "streets" shows detailed land, roads and place labels; "naturalEarth" shows
++  // Cesium's bundled low-resolution land/ocean imagery (best viewed zoomed out).
++  imagery: 'streets',
++  showTrainingGrid: false
++});

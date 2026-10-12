@@ -1,0 +1,7 @@
+NEW VERSION: Reading + Alvernia sights with globe/land imagery.
+
+For a website upload: extract this ZIP, then upload ALL extracted contents together to the website publishing root. index.html and Config.js must be at that root alongside app.js, style.css and the other files. Replace old copies. Preserve the capital C in Config.js. Hard-refresh your browser after publishing.
+
+For Canvas: upload this ZIP as the updated project attachment. Partner feedback, personal AI review and the reflection draft still need your completion before final submission.
+
+This ZIP has index.html at its top level. No access token or account is required. It needs internet and WebGL. The local 127.0.0.1 link is not a public website.

@@ -1,0 +1,13 @@
+Check,Action,Expected result,Actual result,Status,Evidence
+Baseline,Open original starter; Fly,"Grid, gold marker, origin label, paused defaults; Fly changes latitude",Globe and labels rendered; defaults correct; Fly latitude 40.33010,PASS,Browser observation; original starter preserved separately
+Pause,Fly; Pause; wait at least 5 seconds,Coordinates and height unchanged,"-75.93000, 40.33137, 500 m remained unchanged after tool-call interval exceeding 5 seconds",PASS,Codex browser UI observation
+Turn,Reset; Right nine times; Fly,Heading 90; longitude increases,Heading 90; longitude -75.92986 from -75.93000,PASS,Codex browser UI observation
+Speed,Reset for each trial; north; 30 and 60 m/s; wait 5 seconds; Pause,Roughly twice distance at 60,Latitude 40.33136 at 30 and 40.33272 at 60; increments .00136 and .00272; ratio 2.00,PASS,Same 5000-ms wait; approximate UI timing and rounded coordinates
+Reset,"Change location, heading, height and slow preset; Reset",Origin; 500 m; 70 m/s; heading 0; paused,"All defaults restored: -75.93000,40.33000,500,70,0,paused",PASS,Codex browser UI observation
+Limits,Enter 0 and 6000 in height; Tab to commit,Clamp to 50 and 5000,Input and readout displayed 50 then 5000,PASS,Codex browser UI observation
+Slow Tour,Use paused; then flying; then Reset,30 input/readout; preserve paused/flying; reset 70,Paused 30 at origin; flying 30 latitude 40.33003; Reset 70,PASS,Codex browser UI observation
+Automated baseline,Open original tests.html,Seven pass,Seven pass,PASS,evidence/baseline.txt
+Break exercise,Remove * dt in separate copy; open tests.html,Duration consistency fails,Six pass; duration consistency fails,EXPECTED FAILURE,evidence/broken-copy.txt
+Restore exercise,Restore original expression; reload tests.html,Seven pass,Seven pass,PASS,evidence/restored-copy.txt
+Automated final,Open final tests.html,Seven pass,Seven pass,PASS,evidence/final.txt
+Partner,Partner follows README uncoached for 3 minutes,Partner can run project; record issue and improve README,Not performed,PENDING,Complete Partner_Check.md
